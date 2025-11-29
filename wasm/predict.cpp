@@ -1,11 +1,5 @@
-#include <iostream>
-#include <cmath>
-#include <fstream>
+#include "predict.h"
 #include "model_weights.h"
-
-inline float leaky_relu(float x, float negative_slope = LEAKY_RELU_NEGATIVE_SLOPE) {
-    return x > 0.0f ? x : x * negative_slope;
-}
 
 void forward(const float* input, float* output) {
     // Layer 1 - compiler can auto-vectorize with proper alignment
@@ -36,29 +30,4 @@ void forward(const float* input, float* output) {
         }
         output[i] = sum;
     }
-}
-
-int main() {
-    alignas(64) float input[INPUT_DIM];
-
-    std::ifstream input_file("example_data.txt");
-
-    for (int i = 0; i < INPUT_DIM; ++i) {
-        input_file >> input[i];
-    }
-
-    alignas(64) float output[OUTPUT_DIM];
-
-    forward(input, output);
-
-    std::size_t max_index = 0;
-    for (std::size_t i = 1; i < OUTPUT_DIM; ++i) {
-        if (output[i] > output[max_index]) {
-            max_index = i;
-        }
-    }
-
-    std::cout << "Predicted class: " << CLASS_NAMES[max_index] << std::endl;
-
-    return 0;
 }
