@@ -1,11 +1,13 @@
-#include <limits>
-#include <numeric>
+#include <cassert>
+#include <tuple>
 
-#include "image_types.h"
 #include "affine_transform.h"
+#include "geometry_types.h"
 
 std::tuple<double, double> meanXY(const std::vector<Point>& pts) {
-    if(pts.empty()) return {0.0, 0.0};
+    if (pts.empty()) {
+        return {0.0, 0.0};
+    }
 
     double sum_x = 0.0;
     double sum_y = 0.0;
@@ -21,14 +23,46 @@ std::tuple<double, double> meanXY(const std::vector<Point>& pts) {
     return {mean_x, mean_y};
 }
 
+std::vector<Point> transformLandmarks(
+    const std::vector<Point>& landmarks,
+    const double matrix_2x3[][3]
+) {
+    assert(matrix_2x3 != nullptr);
+
+    std::vector<Point> transformed;
+
+    // 미리 메모리 할당
+    transformed.reserve(landmarks.size());
+
+    for (const Point& pt : landmarks) {
+        Point new_pt;
+        // Affine transformation 적용
+        new_pt.x = \
+            matrix_2x3[0][0] * pt.x \
+            + matrix_2x3[0][1] * pt.y \
+            + matrix_2x3[0][2];
+
+        new_pt.y = \
+            matrix_2x3[1][0] * pt.x \
+            + matrix_2x3[1][1] * pt.y \
+            + matrix_2x3[1][2];
+
+        transformed.push_back(new_pt);
+    }
+    return transformed;
+}
+
 bool estimateAffinePartial2D(
     const std::vector<Point>& src_points,
     const std::vector<Point>& dst_points,
     double matrix_2x3[][3]
 ) {
+    assert(src_points.size() == dst_points.size());
+    assert(src_points.size() >= 2);
+
     int n = src_points.size();
 
-    auto [src_cx,src_cy] = meanXY(src_points);
+    auto [src_cx, src_cy] = meanXY(src_points);
     auto [dst_cx, dst_cy] = meanXY(dst_points);
 
     double num_a = 0.0;
@@ -44,14 +78,14 @@ bool estimateAffinePartial2D(
 
         // 회전 및 스케일 추정
         // cos 선분 (vector 내적)
-        //두 좌표가 얼마나 같은 방향을 보고 있는가 
-        num_a += sx * dx + sy * dy; 
-        
+        // 두 좌표가 얼마나 같은 방향을 보고 있는가
+        num_a += sx * dx + sy * dy;
+
         // sin 선분 (vector 외적)
         // 두 좌표가 얼마나 서로 직교 하는가 (90도일 때 가장 커짐)
-        num_b += sx * dy - sy * dx; 
+        num_b += sx * dy - sy * dx;
 
-        // a,b의 대표값을 찾기 위함
+        // a, b 의 분모 계산을 위한 제곱합
         den += sx * sx + sy * sy;
     }
 
@@ -67,7 +101,7 @@ bool estimateAffinePartial2D(
     double tx = dst_cx - (a * src_cx - b * src_cy);
     double ty = dst_cy - (b * src_cx + a * src_cy);
 
-    matrix_2x3[0][0] = a; 
+    matrix_2x3[0][0] = a;
     matrix_2x3[0][1] = -b;
     matrix_2x3[0][2] = tx;
     matrix_2x3[1][0] = b;
