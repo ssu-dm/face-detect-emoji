@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <iostream>
 
 #include "geometry.h"
 #include "predict.h"
