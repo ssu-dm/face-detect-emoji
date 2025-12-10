@@ -229,12 +229,12 @@
             console.error('WASM 모듈 로드 실패:', error);
         });
 
-        function processFrame(imageData, faceLandmarks) {
+        function processFrame(imageData, faces) {
             if (!wasmReady || !expressionModule) {
                 return null;
             }
 
-            if (!faceLandmarks || faceLandmarks.length === 0) {
+            if (!faces || faces.length === 0) {
                 return null;
             }
 
@@ -244,7 +244,8 @@
 
             const width = imageData.width;
             const height = imageData.height;
-            const numLandmarks = faceLandmarks.length;
+            const numFaces = faces.length; // 얼굴 갯수
+            const numLandmarks = faces[0].length; // 랜드마크 갯수
 
             // RGBA 이미지 데이터를 메모리에 복사
             const imageSize = width * height * 4;
@@ -252,14 +253,16 @@
             expressionModule.HEAPU8.set(imageData.data, imagePtr);
 
             // 랜드마크를 [x, y, x, y, ...] 형식으로 변환
-            const landmarksFlat = new Float32Array(numLandmarks * 2);
-            for (let i = 0; i < numLandmarks; i++) {
-                landmarksFlat[i * 2] = faceLandmarks[i].x;
-                landmarksFlat[i * 2 + 1] = faceLandmarks[i].y;
+            const landmarksFlat = new Float32Array(numFaces * numLandmarks * 2);
+            for (let faceIndex = 0; faceIndex < numFaces; faceIndex++) {
+                for (let landmarkIndex = 0; landmarkIndex < numLandmarks; landmarkIndex++) {
+                    landmarksFlat[faceIndex * numLandmarks * 2 + landmarkIndex * 2] = faces[faceIndex][landmarkIndex].x;
+                    landmarksFlat[faceIndex * numLandmarks * 2 + landmarkIndex * 2 + 1] = faces[faceIndex][landmarkIndex].y;
+                }
             }
 
             // 랜드마크 데이터를 메모리에 복사
-            const landmarksSize = numLandmarks * 2 * Float32Array.BYTES_PER_ELEMENT;
+            const landmarksSize = numFaces * numLandmarks * 2 * Float32Array.BYTES_PER_ELEMENT;
             const landmarksPtr = expressionModule._malloc(landmarksSize);
             expressionModule.HEAPF32.set(landmarksFlat, landmarksPtr / Float32Array.BYTES_PER_ELEMENT);
 
@@ -269,7 +272,7 @@
                     'process_frame',
                     null,
                     ['number', 'number', 'number', 'number', 'number'],
-                    [imagePtr, width, height, landmarksPtr, numLandmarks * 2]
+                    [imagePtr, width, height, landmarksPtr, numFaces]
                 );
 
                 // 수정된 이미지 데이터를 메모리에서 읽기
@@ -321,7 +324,7 @@
                     outputFaceBlendshapes: false,
                     outputFacialTransformationMatrixes: false,
                     runningMode: 'VIDEO',
-                    numFaces: 1
+                    numFaces: 5
                 });
 
                 document.getElementById('status').textContent = '모델 로드 완료';
@@ -386,7 +389,7 @@
                     
                     // WASM으로 감정 인식 수행 (processFrame 실행 시간 측정)
                     const processStartTime = performance.now();
-                    const processedImageData = processFrame(imageData, results.faceLandmarks[0]);
+                    const processedImageData = processFrame(imageData, results.faceLandmarks);
                     const processEndTime = performance.now();
                     const processLatency = processEndTime - processStartTime;
                     
@@ -399,7 +402,7 @@
                     }
                     
                     // 랜드마크 그리기 (처리된 이미지 위에)
-                    drawLandmarks(results.faceLandmarks[0]);
+                    drawLandmarks(results.faceLandmarks);
                 } else {
                     document.getElementById('emotion').textContent = '-';
                     // 얼굴이 없을 때는 레이턴시를 0으로 업데이트
@@ -411,36 +414,38 @@
         }
 
         // 랜드마크 그리기
-        function drawLandmarks(landmarks) {
+        function drawLandmarks(faces) {
             ctx.fillStyle = 'rgba(33, 128, 141, 0.8)';
             ctx.strokeStyle = 'rgba(33, 128, 141, 0.4)';
             ctx.lineWidth = 1;
 
-            // 점 그리기
-            for (const landmark of landmarks) {
-                const x = landmark.x * canvas.width;
-                const y = landmark.y * canvas.height;
-                
-                ctx.beginPath();
-                ctx.arc(x, y, 2, 0, 2 * Math.PI);
-                ctx.fill();
-            }
-
-            // 얼굴 윤곽선 연결
-            const connections = [
-                [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109, 10]
-            ];
-
-            for (const connection of connections) {
-                ctx.beginPath();
-                for (let i = 0; i < connection.length - 1; i++) {
-                    const start = landmarks[connection[i]];
-                    const end = landmarks[connection[i + 1]];
+            for (const landmarks of faces) {
+                // 점 그리기
+                for (const landmark of landmarks) {
+                    const x = landmark.x * canvas.width;
+                    const y = landmark.y * canvas.height;
                     
-                    ctx.moveTo(start.x * canvas.width, start.y * canvas.height);
-                    ctx.lineTo(end.x * canvas.width, end.y * canvas.height);
+                    ctx.beginPath();
+                    ctx.arc(x, y, 2, 0, 2 * Math.PI);
+                    ctx.fill();
                 }
-                ctx.stroke();
+
+                // 얼굴 윤곽선 연결
+                const connections = [
+                    [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109, 10]
+                ];
+
+                for (const connection of connections) {
+                    ctx.beginPath();
+                    for (let i = 0; i < connection.length - 1; i++) {
+                        const start = landmarks[connection[i]];
+                        const end = landmarks[connection[i + 1]];
+                        
+                        ctx.moveTo(start.x * canvas.width, start.y * canvas.height);
+                        ctx.lineTo(end.x * canvas.width, end.y * canvas.height);
+                    }
+                    ctx.stroke();
+                }
             }
         }
 
