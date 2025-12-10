@@ -6,7 +6,9 @@ emcc main.cpp geometry.cpp predict.cpp -o expression_recognition.js \
   -s ALLOW_MEMORY_GROWTH=1 \
   -s WASM=1 \
   -s MODULARIZE=1 \
-  -s EXPORT_NAME='createExpressionRecognitionModule'
+  -s EXPORT_NAME='createExpressionRecognitionModule' \
+  -O3 \
+  -msimd128
 
 if [ $? -ne 0 ]; then
     echo "Failed to build expression_recognition.js"
