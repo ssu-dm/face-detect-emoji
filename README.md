@@ -139,3 +139,27 @@ canvas 의 모든 픽셀을 $M^{-1}$ 을 이용하여 emoji 의 좌표로 변환
 ![](docs/interpolation.png)
 
 > [wasm/geometry.cpp](wasm/geometry.cpp)
+
+### Benchmark
+
+- Apple Silicon M2
+- Webkit Version 26.0.1 (21622.1.22.11.15)
+
+**Filter Mode**
+
+| Backend | C++ Wasm Latency (ms) | JavaScript Latency (ms) |
+|---------|-----------------------|--------------------------|
+| Landmark Normalization | 0.2 | 0.1 |
+| Neural Network Inference | 0.1 | 2.0 |
+| Emoji Overlay | 1.5 | 5.0 |
+| Total | 1.85 | 7.1 |
+
+
+**Flower Mode (10 emojis)**
+
+| Backend | C++ Wasm Latency (ms) | JavaScript Latency (ms) |
+|---------|-----------------------|--------------------------|
+| Landmark Normalization | 0.2 | 0.1 |
+| Neural Network Inference | 0.1 | 2.0 |
+| Emoji Overlay | 10.5 | 46.0 |
+| Total | 12.6 | 50.1 |
