@@ -10,6 +10,31 @@
 
 </span>
 
+### Team
+
+- Lead: 양재훈
+- Members: 김주형, 정채린, 윤석준
+
+### Role
+
+- 프로젝트 구조 및 기술 설계: 양재훈
+- AI: 양재훈
+- Partial Affine Transformation: 김주형
+- Full Affine Transformation: 정채린
+- Overlay Warp Affine: 윤석준
+
+### Build & Run
+
+```bash
+# Build Wasm
+cd wasm
+./build.sh
+
+# Run
+python3 -m http.server 8000
+open http://localhost:8000
+```
+
 ### Overview
 
 이 프로젝트는 카메라에서 받아온 프레임으로부터 얼굴 랜드마크를 추출하고, 이를 기반으로 얼굴 표정을 인식한 후 표정에 따라 이모지를 출력하는 프로젝트입니다.
@@ -139,6 +164,20 @@ canvas 의 모든 픽셀을 $M^{-1}$ 을 이용하여 emoji 의 좌표로 변환
 ![](docs/interpolation.png)
 
 > [wasm/geometry.cpp](wasm/geometry.cpp)
+
+### Pain Points
+
+- 처음엔 Partial Affine Transformation 을 사용하려고 했으나, 얼굴 랜드마크가 정면으로 찍히지 않을 수 있으므로 Full Affine Transformation 을 사용하였습니다. 이 과정에서 수학적 지식이 부족하여 구현에 어려움을 겪었습니다.
+- 이모지 Warp Affine 과정에서 이모지의 픽셀 좌표가 소수점 이하의 값을 가질 수 있으므로, Bilinear Interpolation 을 통해 픽셀 값을 보간해야 했습니다.
+- 초기 빌드 시 최적화 옵션을 적용하지 않아 레이턴시가 높았습니다.
+
+### Optimization
+
+Wasm 구동 시 아래와 같은 최적화 기법을 사용하여 레이턴시를 최소화 했습니다.
+
+1. `alignas(64)` 및 `constexpr` 를 사용하여 컴파일러가 최적화할 수 있도록 하였습니다.
+2. `float*` 를 `geo::Point` 로 변환하는 과정에서 불필요한 복사를 제거하였습니다.
+3. 빌드 시 `-O3`, `-flto`, `-ffast-math`, `-msimd128`, `-msse4.2` 옵션을 사용하여 수학 연산을 빠르게 하였습니다.
 
 ### Benchmark
 
