@@ -20,7 +20,6 @@
 
 ![Architecture](docs/diagram.png)
 
-
 ### 1. Preprocessing
 
 MediaPipe 를 사용하여 얼굴의 랜드마크를 추출하면 478개의 랜드마크를 얻을 수 있습니다.
