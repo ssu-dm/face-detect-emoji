@@ -202,22 +202,62 @@ function overlayWarpAffine(canvasData, canvasWidth, canvasHeight, srcData, srcWi
     // Iterate through canvas pixels and blend emoji
     for (let y = startY; y < endY; y++) {
         for (let x = startX; x < endX; x++) {
-            // Apply inverse transform to find source pixel
-            const srcX = Math.round(a * x + b * y + c);
-            const srcY = Math.round(d * x + e * y + f);
-            
-            if (srcX >= 0 && srcX < srcWidth && srcY >= 0 && srcY < srcHeight) {
-                const srcIdx = (srcY * srcWidth + srcX) * 4;
+            // Apply inverse transform to find source subpixel
+            const srcFx = a * x + b * y + c;
+            const srcFy = d * x + e * y + f;
+
+            // Get integer parts and fractional parts
+            const srcX0 = Math.floor(srcFx);
+            const srcY0 = Math.floor(srcFy);
+            const fx = srcFx - srcX0;
+            const fy = srcFy - srcY0;
+            const srcX1 = srcX0 + 1;
+            const srcY1 = srcY0 + 1;
+
+            // Bounds check for all corners
+            if (
+                srcX0 >= 0 && srcX1 < srcWidth &&
+                srcY0 >= 0 && srcY1 < srcHeight
+            ) {
+                // Bilinear interpolation for RGBA
+                let rgba = [0, 0, 0, 0];
+                for (let channel = 0; channel < 4; channel++) {
+                    // (0, 0)
+                    const idx00 = (srcY0 * srcWidth + srcX0) * 4 + channel;
+                    // (1, 0)
+                    const idx10 = (srcY0 * srcWidth + srcX1) * 4 + channel;
+                    // (0, 1)
+                    const idx01 = (srcY1 * srcWidth + srcX0) * 4 + channel;
+                    // (1, 1)
+                    const idx11 = (srcY1 * srcWidth + srcX1) * 4 + channel;
+
+                    // Bilinear interpolation formula:
+                    const v00 = srcData[idx00];
+                    const v10 = srcData[idx10];
+                    const v01 = srcData[idx01];
+                    const v11 = srcData[idx11];
+
+                    const val =
+                          (1 - fx) * (1 - fy) * v00
+                        + (fx)     * (1 - fy) * v10
+                        + (1 - fx) * (fy)     * v01
+                        + (fx)     * (fy)     * v11;
+
+                    rgba[channel] = val;
+                }
+
+                // Write to canvasData (alpha blending)
                 const dstIdx = (y * canvasWidth + x) * 4;
-                
-                const alpha = srcData[srcIdx + 3];
-                
-                // Only copy if alpha is non-zero
+                const alpha = rgba[3] / 255;
+
                 if (alpha > 0) {
-                    canvasData[dstIdx] = srcData[srcIdx];         // R
-                    canvasData[dstIdx + 1] = srcData[srcIdx + 1]; // G
-                    canvasData[dstIdx + 2] = srcData[srcIdx + 2]; // B
-                    canvasData[dstIdx + 3] = srcData[srcIdx + 3]; // A
+                    // Simple "over" alpha blend
+                    for (let c = 0; c < 3; c++) {
+                        canvasData[dstIdx + c] =
+                            Math.round(rgba[c] * alpha + canvasData[dstIdx + c] * (1 - alpha));
+                    }
+                    canvasData[dstIdx + 3] =
+                        Math.round(255 * (alpha + canvasData[dstIdx + 3] / 255 * (1 - alpha)));
                 }
             }
         }

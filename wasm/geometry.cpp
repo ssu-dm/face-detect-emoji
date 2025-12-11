@@ -248,33 +248,55 @@ bool overlayWarpAffine(
 
     const int CHANNELS = 4; // RGBA
 
-    // 3. 픽셀 순회 및 합성
+    // 3. 픽셀 순회 및 bilinear 합성
     for (int y = start_y; y < end_y; y++) {
-        // 행의 시작 포인터 계산 (Step/Stride 활용하여 안전하게 접근)
         unsigned char* dst_row = canvas_data + (y * canvas_width * CHANNELS);
 
         for (int x = start_x; x < end_x; x++) {
-            float src_x_float = a * x + b * y + c;
-            float src_y_float = d * x + e * y + f;
+            float src_xf = a * x + b * y + c;
+            float src_yf = d * x + e * y + f;
 
-            int src_x = (int)std::round(src_x_float);
-            int src_y = (int)std::round(src_y_float);
+            int src_x0 = (int)std::floor(src_xf);
+            int src_y0 = (int)std::floor(src_yf);
+            float fx = src_xf - src_x0;
+            float fy = src_yf - src_y0;
+            int src_x1 = src_x0 + 1;
+            int src_y1 = src_y0 + 1;
 
-            if (src_x >= 0 && src_x < src_width && src_y >= 0 && src_y < src_height) {
-                const unsigned char* src_row = src_data + (src_y * src_width * CHANNELS);
-                int src_col_idx = src_x * CHANNELS;
-                
-                unsigned char p0 = src_row[src_col_idx];     // R
-                unsigned char p1 = src_row[src_col_idx + 1]; // G
-                unsigned char p2 = src_row[src_col_idx + 2]; // B
-                unsigned char p3 = src_row[src_col_idx + 3]; // A
+            if (
+                src_x0 >= 0 && src_x1 < src_width &&
+                src_y0 >= 0 && src_y1 < src_height
+            ) {
+                float rgba[4] = {0, 0, 0, 0};
+                for (int cix = 0; cix < 4; cix++) {
+                    // (0,0)
+                    const unsigned char v00 = src_data[(src_y0 * src_width + src_x0) * CHANNELS + cix];
+                    // (1,0)
+                    const unsigned char v10 = src_data[(src_y0 * src_width + src_x1) * CHANNELS + cix];
+                    // (0,1)
+                    const unsigned char v01 = src_data[(src_y1 * src_width + src_x0) * CHANNELS + cix];
+                    // (1,1)
+                    const unsigned char v11 = src_data[(src_y1 * src_width + src_x1) * CHANNELS + cix];
 
-                if (p3 & 0xff) { 
-                    int dst_col_idx = x * CHANNELS;
-                    dst_row[dst_col_idx]     = p0;
-                    dst_row[dst_col_idx + 1] = p1;
-                    dst_row[dst_col_idx + 2] = p2;
-                    dst_row[dst_col_idx + 3] = p3;
+                    float val =
+                        (1 - fx) * (1 - fy) * v00 +
+                        fx       * (1 - fy) * v10 +
+                        (1 - fx) * fy       * v01 +
+                        fx       * fy       * v11;
+                    rgba[cix] = val;
+                }
+
+                // Alpha blending (paste source pixel "over" destination pixel)
+                int dst_col_idx = x * CHANNELS;
+                float alpha = rgba[3] / 255.0f;
+                if (alpha > 0.0f) {
+                    for (int cix = 0; cix < 3; cix++) {
+                        dst_row[dst_col_idx + cix] = 
+                            (unsigned char)std::round(rgba[cix] * alpha + dst_row[dst_col_idx + cix] * (1.0f - alpha));
+                    }
+                    // Update alpha
+                    dst_row[dst_col_idx + 3] = 
+                        (unsigned char)std::round(255.0f * (alpha + (dst_row[dst_col_idx + 3] / 255.0f) * (1.0f - alpha)));
                 }
             }
         }
