@@ -45,7 +45,7 @@ open http://localhost:8000
 
 ![Architecture](docs/diagram.png)
 
-### 1. Preprocessing
+### 1. Partial Affine Transformation
 
 MediaPipe 를 사용하여 얼굴의 랜드마크를 추출하면 478개의 랜드마크를 얻을 수 있습니다.
 
@@ -117,9 +117,9 @@ void forward(const float* input, float* output) {
 
 `alignas(64)` 를 사용하여 64바이트 단위로 메모리를 정렬하고, `HIDDEN1_DIM`, `HIDDEN2_DIM`, `INPUT_DIM`, `OUTPUT_DIM` 을 `constexpr` 로 정의하여 컴파일러가 최대한 최적화할 수 있도록 하였습니다.
 
-### 3. Emoji Overlay
+### 3. Affine Transformation
 
-얼굴 표정을 인식한 후 이모지를 얼굴에 출력하기 위해, 이모지 상 좌표와 얼굴 랜드마크 간 변환 식을 Full Affine Transformation 을 통해 계산합니다.
+얼굴 표정을 인식한 후 이모지를 얼굴에 출력하기 위해, 이모지 상 좌표와 얼굴 랜드마크 간 변환 식을 Affine Transformation 을 통해 계산합니다.
 
 ```math
 \begin{bmatrix}
@@ -157,9 +157,21 @@ v_2 = dx_2 + ey_2 + f \\
 
 구한 Affine Matrix $M$ 은 emoji 에서 canvas 로의 변환 행렬입니다. 곧, $M^{-1}$ 은 canvas 에서 emoji 로의 변환 행렬입니다.
 
+### 4. Overlay Warp Affine
+
 canvas 의 모든 픽셀을 $M^{-1}$ 을 이용하여 emoji 의 좌표로 변환한 후, 이모지의 픽셀 값을 가져오면 이모지를 얼굴에 출력할 수 있습니다.
 
-이 과정에서 이모지의 픽셀 좌표가 소수점 이하의 값을 가질 수 있으므로, Bilinear Interpolation 을 통해 픽셀 값을 보간합니다.
+source 이미지의 모서리에 대해 $M$ 을 이용하여 canvas 에 들어가야 하는 source 의 범위를 구할 수 있습니다. 
+
+![](docs/bounding_box.png)
+
+이후 canvas 의 모든 픽셀을 $M^{-1}$ 을 이용하여 emoji 의 좌표로 변환하고, 그 좌표에 대한 source 의 픽셀 값을 가져오면 결과적으로 canvas 위에 source 이미지가 출력됩니다.
+
+![](docs/warp_affine.png)
+
+이 과정에서 이모지의 픽셀 좌표 $(u_0, v_0)$ 가 소수점 이하의 값을 가질 수 있으므로, Bilinear Interpolation 을 통해 픽셀 값을 보간합니다.
+
+이는 소수점 이하의 값을 가지는 픽셀 주변에 있는 4개의 픽셀 값을 얼마나 가깝냐에 따라 가중치를 부여하여 보간하는 방식입니다.
 
 ![](docs/interpolation.png)
 
